@@ -16,6 +16,8 @@
 
 package io.strandberg.xadisk;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.jta.JtaTransactionManager;
@@ -40,6 +42,8 @@ import java.util.WeakHashMap;
 @Component
 public class XADiskSessionFactory {
 
+    protected transient Log logger = LogFactory.getLog(getClass());
+
     private TransactionManager transactionManager;
     private StandaloneFileSystemConfiguration standaloneFileSystemConfiguration;
     private XAFileSystem xaFileSystem;
@@ -59,22 +63,36 @@ public class XADiskSessionFactory {
 
         synchronized (transaction) {
 
-            // get the xaSession associated with the current transaction
+            // get the xaSession associated with the current transaction - if any
             XASession xaSession = xaSessionMap.get(transaction);
 
             if (xaSession == null) {
+
+                // create a new xaSession
                 xaSession = xaFileSystem.createSessionForXATransaction();
+                logger.debug("New XASession has been created");
+
+                // enlist the xaSessions XAResource
                 transaction.enlistResource(xaSession.getXAResource());
+                logger.debug("XASession's XAResource has been enlisted in transaction");
+
+                // Remove the xaSession from the xaSessionMap after the transaction is completed
                 transaction.registerSynchronization(new Synchronization() {
                     public void beforeCompletion() {
                     }
 
                     public void afterCompletion(int status) {
                         xaSessionMap.remove(transaction);
+                        logger.debug("XASession has been removed from the XASession Map");
                     }
                 });
 
+                // Associate the transaction with the xaSession
                 xaSessionMap.put(transaction, xaSession);
+                logger.debug("New XASession added to XASession Map");
+
+            } else {
+                logger.debug("XASession found in XASession Map");
             }
 
             return xaSession;
@@ -85,11 +103,13 @@ public class XADiskSessionFactory {
     public void init() throws InterruptedException {
         xaFileSystem = XAFileSystemProxy.bootNativeXAFileSystem(standaloneFileSystemConfiguration);
         xaFileSystem.waitForBootup(-1);
+        logger.debug("XAFileSystem has booted");
     }
 
     @PreDestroy
     public void destroy() throws IOException {
         xaFileSystem.shutdown();
+        logger.debug("XAFileSystem has shut down");
     }
 
 }
