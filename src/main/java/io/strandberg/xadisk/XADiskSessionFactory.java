@@ -36,7 +36,6 @@ import java.util.WeakHashMap;
  * Inspired by org.hibernate.context.JTASessionContext
  *
  * @author Niels Peter Strandberg
- * @see org.hibernate.context.JTASessionContext
  */
 @Component
 public class XADiskSessionFactory {
